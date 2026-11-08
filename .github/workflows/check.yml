@@ -1,0 +1,18 @@
+name: Checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install QML parser
+        run: sudo apt-get update && sudo apt-get install -y qt6-declarative-dev-tools
+      - name: Test collector, catalogs, manifest and QML syntax
+        run: bash scripts/check.sh

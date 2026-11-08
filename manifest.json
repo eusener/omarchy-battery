@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "eusener.power",
+  "name": "Omarchy Battery",
+  "version": "1.0.0",
+  "author": "Eusener Castilho; based on Omarchy",
+  "description": "Local battery identity, capacity and health telemetry",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Battery",
+    "description": "Battery identity, capacity, health and power profiles",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.power"
+  }
+}
