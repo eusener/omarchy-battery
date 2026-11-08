@@ -75,6 +75,19 @@ class BatteryTests(unittest.TestCase):
         self.assertEqual(result['power'], 24)
         self.assertEqual(result['temperature'], 32.5)
 
+    def test_percentage_and_status_are_reported(self):
+        result = self.read(capacity=72, status='Discharging')[0]
+        self.assertEqual(result['percentage'], 72)
+        self.assertEqual(result['status'], 'Discharging')
+
+    def test_percentage_falls_back_to_capacity_ratio(self):
+        result = self.read(energy_full_design=50000000, energy_full=40000000,
+                           energy_now=10000000, capacity='bad')[0]
+        self.assertEqual(result['percentage'], 25)
+
+    def test_percentage_rejects_out_of_range(self):
+        self.assertIsNone(self.read(capacity=101)[0]['percentage'])
+
 
 if __name__ == '__main__':
     unittest.main()

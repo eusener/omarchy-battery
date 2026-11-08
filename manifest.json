@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "eusener.power",
   "name": "Omarchy Battery",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Eusener Castilho; based on Omarchy",
-  "description": "Local battery identity, capacity and health telemetry",
+  "description": "Local battery health, measured runtime and discharge chart",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "Battery",
-    "description": "Battery identity, capacity, health and power profiles",
+    "description": "Battery identity, health, real usage chart and power profiles",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

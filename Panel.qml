@@ -7,6 +7,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
+import "UsageModel.js" as UsageModel
 
 Panel {
   id: root
@@ -18,6 +19,12 @@ Panel {
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
   property bool technicalDetails: false
   property var batteryDetails: []
+  property var batteryUsage: ({})
+  property bool usageLoaded: false
+  property bool usageError: false
+  property bool usageStorageError: false
+  property bool usageRefreshPending: false
+  property var usageSamplesExpanded: ({})
   property var batteryInfo: ({})
   property var systemInfo: ({})
   property var profiles: []
@@ -102,10 +109,24 @@ Panel {
 
   readonly property string heroStatusText: modeLabel()
 
+  function refreshUsage() {
+    if (!usageProc) return
+    if (usageProc.running) usageRefreshPending = true
+    else usageProc.running = true
+  }
+
+  Component.onCompleted: refreshUsage()
+  onDischargingChanged: Qt.callLater(refreshUsage)
+
+  function usageDuration(seconds) {
+    return UsageModel.duration(seconds, strings.t, Commons.I18n.formatNumber)
+  }
+
   function refresh() {
     if (!batteryPresent) return
 
     if (!detailsProc.running) detailsProc.running = true
+    refreshUsage()
     if (!batteryProc.running) batteryProc.running = true
     if (!profilesProc.running) profilesProc.running = true
     if (!systemProc.running) systemProc.running = true
@@ -185,6 +206,36 @@ Panel {
     if (typeof value === "number") return Commons.I18n.formatNumber(value, decimals || 0) + (unit ? " " + unit : "")
     return String(value)
   }
+
+  Process {
+    id: usageProc
+    command: ["python3", Qt.resolvedUrl("usage.py").toString().replace(/^file:\/\//, "")]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var result = JSON.parse(text)
+          if (!result.devices || typeof result.devices !== "object" || Array.isArray(result.devices)) throw new Error("Invalid usage")
+          root.batteryUsage = result.devices
+          root.usageStorageError = result.storage_error === true
+          root.usageError = false
+        } catch (e) { root.usageError = true }
+        root.usageLoaded = true
+      }
+    }
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode !== 0) {
+        root.usageError = true
+        root.usageLoaded = true
+      }
+      if (root.usageRefreshPending) {
+        root.usageRefreshPending = false
+        Qt.callLater(root.refreshUsage)
+      }
+    }
+  }
+
+  Timer { interval: 30000; running: root.batteryPresent; repeat: true; onTriggered: root.refreshUsage() }
 
   Process {
     id: detailsProc
@@ -464,8 +515,100 @@ Panel {
           Column {
             id: deviceColumn
             required property var modelData
+            readonly property var usage: root.batteryUsage[modelData.name] || null
+            readonly property bool showUsageSamples: root.usageSamplesExpanded[modelData.name] === true
             width: column.width
             spacing: Style.space(16)
+
+            Column {
+              width: parent.width
+              spacing: Style.space(12)
+              PanelSectionHeader {
+                text: strings.t("usageTitle")
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+              }
+              Text {
+                width: parent.width
+                text: root.usageError ? strings.t("usageError") : (root.usageStorageError ? strings.t("usageStorageError") : (!root.usageLoaded ? strings.t("usageLoading") : (!deviceColumn.usage ? (deviceColumn.modelData.percentage === null ? strings.t("usageNoPercentage") : strings.t("usageEmpty")) : (deviceColumn.usage.active ? strings.t("usageActive") : strings.t("usageCompleted")))))
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                color: root.bar.foreground
+                opacity: 0.65
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+              Column {
+                visible: deviceColumn.usage !== null
+                width: parent.width
+                spacing: Style.space(12)
+                MetricCard {
+                  width: parent.width
+                  label: strings.t("usageMeasured")
+                  value: deviceColumn.usage ? root.usageDuration(deviceColumn.usage.elapsed) : "—"
+                }
+                DetailLine {
+                  label: strings.t("usageCharge")
+                  value: deviceColumn.usage ? strings.t("usageChargeRange").arg(Commons.I18n.formatNumber(deviceColumn.usage.start_percentage, 0)).arg(Commons.I18n.formatNumber(deviceColumn.usage.end_percentage, 0)) : "—"
+                }
+                Text {
+                  width: parent.width
+                  text: strings.t("usageAxes")
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  color: root.bar.foreground
+                  opacity: 0.65
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+                UsageChart {
+                  width: parent.width
+                  height: implicitHeight
+                  session: deviceColumn.usage
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  accessibleLabel: strings.t("usageAxes")
+                }
+                Text {
+                  width: parent.width
+                  text: deviceColumn.usage && deviceColumn.usage.partial ? strings.t("usagePartial") : strings.t("usageNote")
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  color: root.bar.foreground
+                  opacity: 0.65
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+                Button {
+                  width: parent.width
+                  text: deviceColumn.showUsageSamples ? strings.t("usageHideSamples") : strings.t("usageShowSamples")
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  fontSize: Style.font.bodySmall
+                  bordered: true
+                  active: deviceColumn.showUsageSamples
+                  onClicked: {
+                    var expanded = Object.assign({}, root.usageSamplesExpanded)
+                    expanded[deviceColumn.modelData.name] = !deviceColumn.showUsageSamples
+                    root.usageSamplesExpanded = expanded
+                  }
+                }
+                Column {
+                  visible: deviceColumn.showUsageSamples
+                  width: parent.width
+                  spacing: Style.space(8)
+                  Repeater {
+                    model: deviceColumn.showUsageSamples ? UsageModel.bars(deviceColumn.usage) : []
+                    DetailLine {
+                      required property var modelData
+                      label: root.usageDuration(modelData.elapsed)
+                      value: Commons.I18n.formatNumber(modelData.percentage, 0) + "%"
+                    }
+                  }
+                }
+              }
+            }
+            PanelSeparator { foreground: root.bar.foreground }
 
             Item {
               width: parent.width

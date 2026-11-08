@@ -38,7 +38,13 @@ def collect(root=Path('/sys/class/power_supply')):
         if power is None and current is not None and voltage is not None:
             power = current * voltage / 1e6
         temperature = number('temp')
+        percentage = number('capacity')
+        if percentage is None and full and capacities['now'] is not None:
+            percentage = capacities['now'] / full * 100
+        if percentage is not None and not 0 <= percentage <= 100:
+            percentage = None
         batteries.append(dict(
+            percentage=percentage, status=read('status'),
             name=device.name, manufacturer=read('manufacturer'),
             brand=read('brand'), model=read('model_name'),
             part_number=read('part_number'), serial=read('serial_number'),

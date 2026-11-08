@@ -12,6 +12,8 @@ aparência acompanha o tema, a fonte e a escala da sua instalação.*
 ## Recursos
 
 - Resumo de saúde, desgaste e ciclos de carga.
+- Tempo real de uso fora da tomada e gráfico de barras de percentual × tempo.
+- Registro em segundo plano, descontando a suspensão, com a última sessão salva localmente.
 - Capacidade de projeto, capacidade máxima atual e carga restante na mesma escala.
 - Fabricante e modelo visíveis no resumo.
 - Detalhes técnicos: marca, part number, número de série, tecnologia, tensão,
@@ -95,9 +97,37 @@ remover: o comando de remoção apaga clones Git após confirmação.
 | Escolher perfil de energia | Clique ou setas e **Enter** |
 | Fechar | **Esc** |
 
-O painel consulta as baterias ao abrir e a cada cinco segundos enquanto aberto.
-Não há consultas de telemetria adicionais quando fechado. Os serviços originais
-do Omarchy continuam responsáveis pelo ícone e pelos avisos de bateria fraca.
+O painel consulta os detalhes das baterias ao abrir e a cada cinco segundos
+enquanto aberto. Para medir o uso, faz também uma leitura a cada 30 segundos
+com o painel fechado e ao detectar mudanças da fonte de energia. Os serviços
+originais do Omarchy continuam responsáveis pelo ícone e pelos avisos de bateria fraca.
+
+### Tempo real de uso e gráfico
+
+Ao desconectar o carregador, o plugin inicia uma sessão por bateria interna.
+O contador soma o tempo em que o computador fica ligado fora da tomada,
+descontando a suspensão. Bloquear a tela ou ficar sem digitar não pausa a
+contagem: o computador continua usando a bateria.
+
+O gráfico mostra o **percentual restante na vertical (0–100%)** e o **tempo de
+uso acumulado na horizontal**. As barras correspondem a leituras reais; não há
+projeção de autonomia. Use “Mostrar leituras do gráfico” para consultar os
+valores exibidos. Sessões longas têm as amostras antigas compactadas e exibem
+até 24 barras, preservando as leituras inicial e final.
+
+Reconectar o carregador encerra a sessão e mantém o resultado visível. A próxima
+desconexão começa um registro novo, substituindo o anterior. O arquivo local
+`$XDG_STATE_HOME/omarchy-battery/usage.json` (por padrão,
+`~/.local/state/omarchy-battery/usage.json`) guarda somente a sessão atual ou a
+última sessão por bateria; não contém número de série e não é enviado à rede.
+
+O registro depende do plugin carregado no shell. Ao ativá-lo já fora da tomada,
+o painel informa que a medição começou na primeira leitura disponível. Uma
+recarga breve do shell preserva a sessão; reiniciar o computador ou passar mais
+de 90 segundos de tempo ligado sem leituras inicia uma medição parcial. Mudanças
+de energia durante a suspensão ou com o shell parado podem não ser observadas.
+A precisão das transições segue a atualização do UPower e a amostragem de até
+30 segundos. O histórico anterior à instalação não pode ser recuperado.
 
 ### O que significam as capacidades
 
