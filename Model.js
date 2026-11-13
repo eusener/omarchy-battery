@@ -45,6 +45,35 @@ function profileIcon(name) {
   return "󰂄"
 }
 
+// Theme palette keys used to tint the selected power profile button.
+// Omarchy 4 themes name colors (`green`, `blue`, `red`); older themes only
+// ship ANSI slots, so color2/color4/color1 are the fallbacks.
+var PROFILE_PALETTE = {
+  "power-saver": ["green", "color2"],
+  "balanced": ["blue", "color4"],
+  "performance": ["red", "color1"]
+}
+
+function parsePalette(raw) {
+  var palette = {}
+  var lines = String(raw || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var match = lines[i].match(/^\s*([A-Za-z0-9_-]+)\s*=\s*["']?(#[0-9A-Fa-f]{6})/)
+    if (match) palette[match[1]] = match[2]
+  }
+  return palette
+}
+
+function profileColor(name, palette) {
+  var keys = PROFILE_PALETTE[String(name || "")]
+  var values = palette || {}
+  if (!keys) return ""
+  for (var i = 0; i < keys.length; i++) {
+    if (values[keys[i]]) return values[keys[i]]
+  }
+  return ""
+}
+
 function batteryFraction(device) {
   return device && device.isPresent ? Math.max(0, Math.min(1, device.percentage)) : 0
 }
@@ -122,6 +151,8 @@ if (typeof module !== "undefined") {
     batteryIcon: batteryIcon,
     modeLabel: modeLabel,
     profileLabel: profileLabel,
+    parsePalette: parsePalette,
+    profileColor: profileColor,
     localizeReading: localizeReading
   }
 }

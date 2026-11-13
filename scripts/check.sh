@@ -5,6 +5,7 @@ cd "$project_dir"
 python3 -m unittest discover -s tests -v
 if command -v node >/dev/null 2>&1; then
   node tests/test_usage_model.js
+  node tests/test_model.js
 else
   echo 'Node unavailable: chart model tests skipped (not a runtime dependency).'
 fi

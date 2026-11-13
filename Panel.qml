@@ -28,6 +28,7 @@ Panel {
   property var batteryInfo: ({})
   property var systemInfo: ({})
   property var profiles: []
+  property var themePalette: ({})
   property string activeProfile: ""
   property int profileIndex: 0
   property bool cursorActive: false
@@ -254,6 +255,25 @@ Panel {
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateKeyValue(text, "battery") }
   }
 
+  // Theme palette for tinting the selected power profile. Commons.Color only
+  // exposes foreground/accent/urgent, so read colors.toml directly and
+  // re-read whenever the shell applies a new theme.
+  FileView {
+    id: paletteFile
+    path: Commons.Color.currentThemePath + "/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.themePalette = Model.parsePalette(text())
+    onFileChanged: reload()
+    onLoadFailed: root.themePalette = ({})
+  }
+
+  Connections {
+    target: Commons.Color
+    function onForegroundChanged() { paletteFile.reload() }
+    function onAccentChanged() { paletteFile.reload() }
+  }
+
   Process {
     id: profilesProc
     command: ["omarchy-powerprofiles-list", "--active-state"]
@@ -474,17 +494,21 @@ Panel {
               Button {
                 required property var modelData
                 required property int index
+                readonly property bool isActive: root.activeProfile === modelData
+                readonly property string tint: isActive ? Model.profileColor(modelData, root.themePalette) : ""
                 width: profileRow.cellWidth
                 iconText: root.profileIcon(String(modelData))
                 iconSize: Style.font.title
                 text: Model.profileLabel(modelData, Commons.I18n.t)
                 fontSize: Style.font.bodySmall
-                foreground: root.bar.foreground
+                // The active profile takes its theme color (green / blue /
+                // red); Button derives text, border and fill from foreground.
+                foreground: tint !== "" ? tint : root.bar.foreground
                 fontFamily: root.bar.fontFamily
                 horizontalPadding: Style.spacing.controlPaddingX
                 verticalPadding: Style.spacing.controlPaddingY + Style.space(2)
                 bordered: true
-                active: root.activeProfile === modelData
+                active: isActive
                 hasCursor: root.cursorActive && root.profileIndex === index
                 onClicked: root.setProfile(modelData)
                 onHovered: function(h) {
