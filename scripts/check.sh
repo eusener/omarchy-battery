@@ -3,6 +3,12 @@ set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_dir"
 python3 -m unittest discover -s tests -v
+if command -v node >/dev/null 2>&1; then
+  node tests/test_usage_model.js
+  node tests/test_model.js
+else
+  echo 'Node unavailable: chart model tests skipped (not a runtime dependency).'
+fi
 python3 - <<'PY'
 import json
 from pathlib import Path
@@ -30,6 +36,7 @@ if [[ -z $qml_formatter && -x /usr/lib/qt6/bin/qmlformat ]]; then
 fi
 if [[ -n $qml_formatter ]]; then
   "$qml_formatter" -n Panel.qml >/dev/null
+  "$qml_formatter" -n UsageChart.qml >/dev/null
   echo 'QML syntax: OK'
 else
   echo 'qmlformat unavailable: QML syntax check skipped.'

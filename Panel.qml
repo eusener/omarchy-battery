@@ -7,6 +7,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
+import "UsageModel.js" as UsageModel
 
 Panel {
   id: root
@@ -18,9 +19,15 @@ Panel {
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
   property bool technicalDetails: false
   property var batteryDetails: []
+  property var batteryUsage: ({})
+  property bool usageLoaded: false
+  property bool usageError: false
+  property bool usageStorageError: false
+  property bool usageRefreshPending: false
   property var batteryInfo: ({})
   property var systemInfo: ({})
   property var profiles: []
+  property var themePalette: ({})
   property string activeProfile: ""
   property int profileIndex: 0
   property bool cursorActive: false
@@ -102,10 +109,24 @@ Panel {
 
   readonly property string heroStatusText: modeLabel()
 
+  function refreshUsage() {
+    if (!usageProc) return
+    if (usageProc.running) usageRefreshPending = true
+    else usageProc.running = true
+  }
+
+  Component.onCompleted: refreshUsage()
+  onDischargingChanged: Qt.callLater(refreshUsage)
+
+  function usageDuration(seconds) {
+    return UsageModel.duration(seconds, strings.t, Commons.I18n.formatNumber)
+  }
+
   function refresh() {
     if (!batteryPresent) return
 
     if (!detailsProc.running) detailsProc.running = true
+    refreshUsage()
     if (!batteryProc.running) batteryProc.running = true
     if (!profilesProc.running) profilesProc.running = true
     if (!systemProc.running) systemProc.running = true
@@ -187,6 +208,36 @@ Panel {
   }
 
   Process {
+    id: usageProc
+    command: ["python3", Qt.resolvedUrl("usage.py").toString().replace(/^file:\/\//, "")]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var result = JSON.parse(text)
+          if (!result.devices || typeof result.devices !== "object" || Array.isArray(result.devices)) throw new Error("Invalid usage")
+          root.batteryUsage = result.devices
+          root.usageStorageError = result.storage_error === true
+          root.usageError = false
+        } catch (e) { root.usageError = true }
+        root.usageLoaded = true
+      }
+    }
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode !== 0) {
+        root.usageError = true
+        root.usageLoaded = true
+      }
+      if (root.usageRefreshPending) {
+        root.usageRefreshPending = false
+        Qt.callLater(root.refreshUsage)
+      }
+    }
+  }
+
+  Timer { interval: 30000; running: root.batteryPresent; repeat: true; onTriggered: root.refreshUsage() }
+
+  Process {
     id: detailsProc
     command: ["python3", Qt.resolvedUrl("battery.py").toString().replace(/^file:\/\//, "")]
     stdout: StdioCollector {
@@ -201,6 +252,25 @@ Panel {
     id: batteryProc
     command: ["omarchy-battery-status", "--shell"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateKeyValue(text, "battery") }
+  }
+
+  // Theme palette for tinting the selected power profile. Commons.Color only
+  // exposes foreground/accent/urgent, so read colors.toml directly and
+  // re-read whenever the shell applies a new theme.
+  FileView {
+    id: paletteFile
+    path: Commons.Color.currentThemePath + "/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.themePalette = Model.parsePalette(text())
+    onFileChanged: reload()
+    onLoadFailed: root.themePalette = ({})
+  }
+
+  Connections {
+    target: Commons.Color
+    function onForegroundChanged() { paletteFile.reload() }
+    function onAccentChanged() { paletteFile.reload() }
   }
 
   Process {
@@ -423,17 +493,21 @@ Panel {
               Button {
                 required property var modelData
                 required property int index
+                readonly property bool isActive: root.activeProfile === modelData
+                readonly property string tint: isActive ? Model.profileColor(modelData, root.themePalette) : ""
                 width: profileRow.cellWidth
                 iconText: root.profileIcon(String(modelData))
                 iconSize: Style.font.title
                 text: Model.profileLabel(modelData, Commons.I18n.t)
                 fontSize: Style.font.bodySmall
-                foreground: root.bar.foreground
+                // The active profile takes its theme color (green / blue /
+                // red); Button derives text, border and fill from foreground.
+                foreground: tint !== "" ? tint : root.bar.foreground
                 fontFamily: root.bar.fontFamily
                 horizontalPadding: Style.spacing.controlPaddingX
                 verticalPadding: Style.spacing.controlPaddingY + Style.space(2)
                 bordered: true
-                active: root.activeProfile === modelData
+                active: isActive
                 hasCursor: root.cursorActive && root.profileIndex === index
                 onClicked: root.setProfile(modelData)
                 onHovered: function(h) {
@@ -464,8 +538,98 @@ Panel {
           Column {
             id: deviceColumn
             required property var modelData
+            readonly property var usage: root.batteryUsage[modelData.name] || null
+            readonly property var usageAverage: UsageModel.average(usage)
             width: column.width
             spacing: Style.space(16)
+
+            Column {
+              width: parent.width
+              spacing: Style.space(12)
+              PanelSectionHeader {
+                text: strings.t("usageTitle")
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+              }
+              Text {
+                width: parent.width
+                text: root.usageError ? strings.t("usageError") : (root.usageStorageError ? strings.t("usageStorageError") : (!root.usageLoaded ? strings.t("usageLoading") : (!deviceColumn.usage ? (deviceColumn.modelData.percentage === null ? strings.t("usageNoPercentage") : strings.t("usageEmpty")) : (deviceColumn.usage.active ? strings.t("usageActive") : strings.t("usageCompleted")))))
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                color: root.bar.foreground
+                opacity: 0.65
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+              Column {
+                visible: deviceColumn.usage !== null
+                width: parent.width
+                spacing: Style.space(12)
+                Row {
+                  width: parent.width
+                  spacing: Style.space(12)
+                  MetricCard {
+                    id: measuredCard
+                    width: (parent.width - parent.spacing) / 2
+                    height: Math.max(implicitHeight, averageCard.implicitHeight)
+                    label: strings.t("usageMeasured")
+                    value: deviceColumn.usage ? root.usageDuration(deviceColumn.usage.elapsed) : "—"
+                  }
+                  MetricCard {
+                    id: averageCard
+                    width: (parent.width - parent.spacing) / 2
+                    height: Math.max(implicitHeight, measuredCard.implicitHeight)
+                    label: strings.t("usageAverage")
+                    value: deviceColumn.usageAverage.count > 0 ? root.usageDuration(deviceColumn.usageAverage.seconds) : "—"
+                  }
+                }
+                Text {
+                  width: parent.width
+                  text: deviceColumn.usageAverage.count === 1 ? strings.t("usageAverageOne")
+                    : (deviceColumn.usageAverage.count > 1 ? strings.t("usageAverageMany").arg(Commons.I18n.formatNumber(deviceColumn.usageAverage.count, 0))
+                    : strings.t("usageAverageEmpty"))
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  color: root.bar.foreground
+                  opacity: 0.65
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+                DetailLine {
+                  label: strings.t("usageCharge")
+                  value: deviceColumn.usage ? strings.t("usageChargeRange").arg(Commons.I18n.formatNumber(deviceColumn.usage.start_percentage, 0)).arg(Commons.I18n.formatNumber(deviceColumn.usage.end_percentage, 0)) : "—"
+                }
+                Text {
+                  width: parent.width
+                  text: strings.t("usageAxes")
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  color: root.bar.foreground
+                  opacity: 0.65
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+                UsageChart {
+                  width: parent.width
+                  height: implicitHeight
+                  session: deviceColumn.usage
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  accessibleLabel: strings.t("usageAxes")
+                }
+                Text {
+                  width: parent.width
+                  text: deviceColumn.usage && deviceColumn.usage.partial ? strings.t("usagePartial") : strings.t("usageNote")
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  color: root.bar.foreground
+                  opacity: 0.65
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+            }
+            PanelSeparator { foreground: root.bar.foreground }
 
             Item {
               width: parent.width
