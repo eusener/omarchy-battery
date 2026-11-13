@@ -26,4 +26,23 @@ function duration(seconds, translate, format) {
   return text.replace("%1", fmt(hours > 0 ? hours : minutes)).replace("%2", fmt(minutes % 60))
 }
 
-if (typeof module !== "undefined") module.exports = { bars: bars, duration: duration }
+// Mean time on battery between recharges: the persisted history plus the
+// current session once it has finished. Mirrors usage.py's 5-minute floor.
+var MIN_AVERAGE_ELAPSED = 300
+
+function average(session) {
+  if (!session) return { seconds: 0, count: 0 }
+  var entries = Array.isArray(session.history) ? session.history.slice() : []
+  if (!session.active) entries.push(session)
+  var total = 0
+  var count = 0
+  for (var i = 0; i < entries.length; i++) {
+    var elapsed = Number(entries[i] && entries[i].elapsed)
+    if (!isFinite(elapsed) || elapsed < MIN_AVERAGE_ELAPSED) continue
+    total += elapsed
+    count++
+  }
+  return { seconds: count ? total / count : 0, count: count }
+}
+
+if (typeof module !== "undefined") module.exports = { bars: bars, duration: duration, average: average }

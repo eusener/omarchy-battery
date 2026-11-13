@@ -36,8 +36,10 @@
   "usageLoading": "Loading battery usage…",
   "usageError": "Could not update battery usage. Retrying automatically.",
   "usageStorageError": "Could not save usage history. Check access to your local state directory.",
-  "usageShowSamples": "Show chart readings",
-  "usageHideSamples": "Hide chart readings",
   "usageHours": "%1 h %2 min",
-  "usageMinutes": "%1 min"
+  "usageMinutes": "%1 min",
+  "usageAverage": "Average between recharges",
+  "usageAverageOne": "Average of the last completed session on battery.",
+  "usageAverageMany": "Average of the last %1 sessions on battery.",
+  "usageAverageEmpty": "The average appears after the first battery session of at least 5 min."
 }

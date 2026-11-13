@@ -14,6 +14,7 @@ aparência acompanha o tema, a fonte e a escala da sua instalação.*
 - Resumo de saúde, desgaste e ciclos de carga.
 - Tempo real de uso fora da tomada e gráfico de barras de percentual × tempo.
 - Registro em segundo plano, descontando a suspensão, com a última sessão salva localmente.
+- Tempo médio de uso entre recargas, calculado com as últimas sessões concluídas.
 - Capacidade de projeto, capacidade máxima atual e carga restante na mesma escala.
 - Fabricante e modelo visíveis no resumo.
 - Detalhes técnicos: marca, part number, número de série, tecnologia, tensão,
@@ -111,15 +112,20 @@ contagem: o computador continua usando a bateria.
 
 O gráfico mostra o **percentual restante na vertical (0–100%)** e o **tempo de
 uso acumulado na horizontal**. As barras correspondem a leituras reais; não há
-projeção de autonomia. Use “Mostrar leituras do gráfico” para consultar os
-valores exibidos. Sessões longas têm as amostras antigas compactadas e exibem
-até 24 barras, preservando as leituras inicial e final.
+projeção de autonomia. Sessões longas têm as amostras antigas compactadas e
+exibem até 24 barras, preservando as leituras inicial e final.
+
+Ao lado do tempo medido, “Média entre recargas” mostra a duração média das
+últimas sessões concluídas na bateria (até 10). Sessões com menos de 5 minutos
+fora da tomada não entram na média.
 
 Reconectar o carregador encerra a sessão e mantém o resultado visível. A próxima
-desconexão começa um registro novo, substituindo o anterior. O arquivo local
+desconexão começa um registro novo; a sessão anterior passa para o histórico
+usado na média. O arquivo local
 `$XDG_STATE_HOME/omarchy-battery/usage.json` (por padrão,
-`~/.local/state/omarchy-battery/usage.json`) guarda somente a sessão atual ou a
-última sessão por bateria; não contém número de série e não é enviado à rede.
+`~/.local/state/omarchy-battery/usage.json`) guarda a sessão atual ou a última
+sessão por bateria e um resumo (duração e carga inicial/final) das 10 sessões
+anteriores; não contém número de série e não é enviado à rede.
 
 O registro depende do plugin carregado no shell. Ao ativá-lo já fora da tomada,
 o painel informa que a medição começou na primeira leitura disponível. Uma

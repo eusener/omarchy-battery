@@ -36,8 +36,10 @@
   "usageLoading": "Carregando o registro de uso…",
   "usageError": "Não foi possível atualizar o uso da bateria. Uma nova tentativa será feita automaticamente.",
   "usageStorageError": "Não foi possível salvar o histórico. Verifique o acesso à pasta de estado local.",
-  "usageShowSamples": "Mostrar leituras do gráfico",
-  "usageHideSamples": "Ocultar leituras do gráfico",
   "usageHours": "%1 h %2 min",
-  "usageMinutes": "%1 min"
+  "usageMinutes": "%1 min",
+  "usageAverage": "Média entre recargas",
+  "usageAverageOne": "Média da última sessão concluída na bateria.",
+  "usageAverageMany": "Média das últimas %1 sessões na bateria.",
+  "usageAverageEmpty": "A média aparece após a primeira sessão na bateria de pelo menos 5 min."
 }

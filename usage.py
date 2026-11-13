@@ -1,4 +1,4 @@
-"""Measure observed awake time on battery; persist only the latest local session."""
+"""Measure observed awake time on battery; persist the latest session plus a short history."""
 import copy
 from contextlib import ExitStack
 import fcntl
@@ -15,6 +15,27 @@ MAX_SAMPLES = 241
 MAX_DEVICES = 16
 MAX_STATE_BYTES = 1024 * 1024
 MAX_GAP = 90
+# Completed sessions kept for the average between recharges. Brief unplugs
+# (a cable bump, moving rooms) would drag the average down, so skip them.
+MAX_HISTORY = 10
+MIN_HISTORY_ELAPSED = 300
+
+
+def summary(session):
+    return dict(elapsed=session['elapsed'], ended_at=session['ended_at'],
+                start_percentage=session['start_percentage'],
+                end_percentage=session['end_percentage'])
+
+
+def carried_history(session):
+    """History for a new session: the previous one's history plus itself."""
+    if not session:
+        return []
+    history = list(session.get('history', []))
+    if (not session['active'] and number(session.get('ended_at'))
+            and session['elapsed'] >= MIN_HISTORY_ELAPSED):
+        history.append(summary(session))
+    return history[-MAX_HISTORY:]
 
 
 def number(value, maximum=float('inf')):
@@ -53,7 +74,8 @@ def advance(state, devices, on_battery, now, monotonic, boot_id):
             session = dict(active=True, partial=not (continuous and was_on_battery is False),
                            started_at=now, ended_at=None, elapsed=0,
                            start_percentage=percent, end_percentage=percent,
-                           samples=[dict(elapsed=0, percentage=percent)])
+                           samples=[dict(elapsed=0, percentage=percent)],
+                           history=carried_history(session))
             sessions[name] = session
             continue
         if not session or not session['active']:
@@ -116,6 +138,15 @@ def validate(state):
                     or not number(point.get('percentage'), 100) or point['elapsed'] < previous):
                 return False
             previous = point['elapsed']
+        history = session.get('history', [])
+        if not isinstance(history, list) or len(history) > MAX_HISTORY:
+            return False
+        for entry in history:
+            if (not isinstance(entry, dict)
+                    or any(not number(entry.get(key)) for key in ('elapsed', 'ended_at'))
+                    or any(not number(entry.get(key), 100)
+                           for key in ('start_percentage', 'end_percentage'))):
+                return False
     return True
 
 

@@ -43,6 +43,53 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(state['devices']['BAT0']['start_percentage'], 100)
         self.assertTrue(state['devices']['BAT0']['active'])
 
+    def discharge(self, state, start, seconds, percent=90):
+        """Unplug at `start`, stay on battery for `seconds`, then replug."""
+        state = self.step(state, t=start, plugged=True, percent=percent)
+        for t in range(start + 30, start + 30 + seconds + 1, 60):
+            state = self.step(state, t=t, percent=percent)
+        return self.step(state, t=start + 30 + seconds + 30, plugged=True, percent=percent - 10)
+
+    def test_completed_sessions_feed_the_history(self):
+        state = self.discharge({}, 100, 600)
+        self.assertEqual(state['devices']['BAT0']['history'], [])
+        self.assertEqual(state['devices']['BAT0']['elapsed'], 630)
+        state = self.step(state, t=state['monotonic'] + 30, percent=100)
+        session = state['devices']['BAT0']
+        self.assertTrue(session['active'])
+        self.assertEqual(len(session['history']), 1)
+        self.assertEqual(session['history'][0]['elapsed'], 630)
+        self.assertEqual(session['history'][0]['start_percentage'], 90)
+        self.assertEqual(session['history'][0]['end_percentage'], 80)
+        self.assertTrue(usage.validate(state))
+
+    def test_brief_unplugs_stay_out_of_the_history(self):
+        state = self.discharge({}, 100, 60)
+        state = self.step(state, t=state['monotonic'] + 30)
+        self.assertEqual(state['devices']['BAT0']['history'], [])
+
+    def test_history_is_bounded(self):
+        state = {}
+        for i in range(usage.MAX_HISTORY + 3):
+            state = self.discharge(state, state.get('monotonic', 0) + 30, 300 + i * 60)
+        state = self.step(state, t=state['monotonic'] + 30)
+        history = state['devices']['BAT0']['history']
+        self.assertEqual(len(history), usage.MAX_HISTORY)
+        self.assertEqual(history[-1]['elapsed'], 330 + (usage.MAX_HISTORY + 2) * 60)
+        self.assertTrue(usage.validate(state))
+
+    def test_history_is_validated_and_optional(self):
+        state = self.discharge({}, 100, 600)
+        state = self.step(state, t=state['monotonic'] + 30)
+        legacy = json.loads(json.dumps(state))
+        del legacy['devices']['BAT0']['history']
+        self.assertTrue(usage.validate(legacy))
+        broken = json.loads(json.dumps(state))
+        broken['devices']['BAT0']['history'][0]['end_percentage'] = 140
+        self.assertFalse(usage.validate(broken))
+        broken['devices']['BAT0']['history'] = [state['devices']['BAT0']['history'][0]] * (usage.MAX_HISTORY + 1)
+        self.assertFalse(usage.validate(broken))
+
     def test_starting_on_battery_is_labeled_partial(self):
         self.assertTrue(self.step()['devices']['BAT0']['partial'])
 

@@ -24,7 +24,6 @@ Panel {
   property bool usageError: false
   property bool usageStorageError: false
   property bool usageRefreshPending: false
-  property var usageSamplesExpanded: ({})
   property var batteryInfo: ({})
   property var systemInfo: ({})
   property var profiles: []
@@ -540,7 +539,7 @@ Panel {
             id: deviceColumn
             required property var modelData
             readonly property var usage: root.batteryUsage[modelData.name] || null
-            readonly property bool showUsageSamples: root.usageSamplesExpanded[modelData.name] === true
+            readonly property var usageAverage: UsageModel.average(usage)
             width: column.width
             spacing: Style.space(16)
 
@@ -566,10 +565,35 @@ Panel {
                 visible: deviceColumn.usage !== null
                 width: parent.width
                 spacing: Style.space(12)
-                MetricCard {
+                Row {
                   width: parent.width
-                  label: strings.t("usageMeasured")
-                  value: deviceColumn.usage ? root.usageDuration(deviceColumn.usage.elapsed) : "—"
+                  spacing: Style.space(12)
+                  MetricCard {
+                    id: measuredCard
+                    width: (parent.width - parent.spacing) / 2
+                    height: Math.max(implicitHeight, averageCard.implicitHeight)
+                    label: strings.t("usageMeasured")
+                    value: deviceColumn.usage ? root.usageDuration(deviceColumn.usage.elapsed) : "—"
+                  }
+                  MetricCard {
+                    id: averageCard
+                    width: (parent.width - parent.spacing) / 2
+                    height: Math.max(implicitHeight, measuredCard.implicitHeight)
+                    label: strings.t("usageAverage")
+                    value: deviceColumn.usageAverage.count > 0 ? root.usageDuration(deviceColumn.usageAverage.seconds) : "—"
+                  }
+                }
+                Text {
+                  width: parent.width
+                  text: deviceColumn.usageAverage.count === 1 ? strings.t("usageAverageOne")
+                    : (deviceColumn.usageAverage.count > 1 ? strings.t("usageAverageMany").arg(Commons.I18n.formatNumber(deviceColumn.usageAverage.count, 0))
+                    : strings.t("usageAverageEmpty"))
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  color: root.bar.foreground
+                  opacity: 0.65
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
                 }
                 DetailLine {
                   label: strings.t("usageCharge")
@@ -602,33 +626,6 @@ Panel {
                   opacity: 0.65
                   font.family: root.bar.fontFamily
                   font.pixelSize: Style.font.caption
-                }
-                Button {
-                  width: parent.width
-                  text: deviceColumn.showUsageSamples ? strings.t("usageHideSamples") : strings.t("usageShowSamples")
-                  foreground: root.bar.foreground
-                  fontFamily: root.bar.fontFamily
-                  fontSize: Style.font.bodySmall
-                  bordered: true
-                  active: deviceColumn.showUsageSamples
-                  onClicked: {
-                    var expanded = Object.assign({}, root.usageSamplesExpanded)
-                    expanded[deviceColumn.modelData.name] = !deviceColumn.showUsageSamples
-                    root.usageSamplesExpanded = expanded
-                  }
-                }
-                Column {
-                  visible: deviceColumn.showUsageSamples
-                  width: parent.width
-                  spacing: Style.space(8)
-                  Repeater {
-                    model: deviceColumn.showUsageSamples ? UsageModel.bars(deviceColumn.usage) : []
-                    DetailLine {
-                      required property var modelData
-                      label: root.usageDuration(modelData.elapsed)
-                      value: Commons.I18n.formatNumber(modelData.percentage, 0) + "%"
-                    }
-                  }
                 }
               }
             }
